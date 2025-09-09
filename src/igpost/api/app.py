@@ -3,17 +3,11 @@ import tempfile
 import logging
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, File, UploadFile, Form, Header
 from pydantic import BaseModel
 
 from instagrapi import Client
-
-from igpost.cli import (
-    try_login_with_session_then_password,
-    upload_video,
-    load_env_credentials,
-    configure_logging,
-)
+from instagrapi.exceptions import LoginRequired
 
 logger = logging.getLogger("igpost.api")
 
@@ -25,34 +19,77 @@ class UploadRequest(BaseModel):
     description: str
 
 
-def resolve_credentials() -> tuple[Optional[str], Optional[str]]:
-    # Priority: .env -> IG_* env vars -> None (API does not accept plaintext payload creds by design)
-    username, password = load_env_credentials()
-    if username and password:
-        logger.info("Using credentials from .env file")
-        return username, password
+def try_login_with_session_then_password(
+    client: Client, 
+    username: Optional[str], 
+    password: Optional[str], 
+    session_id: Optional[str],
+    session_file: str
+) -> None:
+    """Login using session_id first, then username/password if needed."""
+    client.delay_range = [1, 3]
 
-    username = os.getenv("IG_USERNAME")
-    password = os.getenv("IG_PASSWORD")
-    if username and password:
-        logger.info("Using credentials from system environment variables")
-        return username, password
+    # Try session_id first if provided
+    if session_id:
+        try:
+            logger.info("Attempting login with session_id")
+            client.login_by_sessionid(session_id)
+            # Validate session
+            try:
+                client.get_timeline_feed()
+                logger.info("Authenticated via session_id")
+                return
+            except LoginRequired:
+                logger.info("Session_id invalid, falling back to username/password")
+        except Exception as e:
+            logger.info("Session_id login failed: %s", e)
 
-    return None, None
+    # Try username/password
+    if not username or not password:
+        raise ValueError("Either session_id or username/password must be provided")
+    
+    logger.info("Attempting username/password login")
+    client.set_settings({})
+    try:
+        client.set_uuids({})
+    except Exception:
+        pass
+    client.login(username, password)
+    logger.info("Authenticated via username/password")
+
+    # Persist session for future use
+    try:
+        client.dump_settings(session_file)
+        logger.info("Session saved to %s", session_file)
+    except Exception as e:
+        logger.info("Failed to save session: %s", e)
 
 
-def get_session_file() -> str:
-    return os.getenv("IGPOST_SESSION_FILE", "session.json")
+def upload_video(client: Client, video_path: str, caption: str) -> str:
+    logger.info("Uploading video: %s", video_path)
+    media = client.clip_upload(video_path, caption)
+    media_code = getattr(media, "code", None)
+    if media_code:
+        url = f"https://www.instagram.com/p/{media_code}/"
+        logger.info("Upload succeeded: %s", url)
+        return url
+    logger.info("Upload completed without code")
+    return ""
 
 
-def get_authenticated_client() -> Client:
+def get_authenticated_client(
+    username: Optional[str] = None,
+    password: Optional[str] = None, 
+    session_id: Optional[str] = None,
+    session_file: str = "session.json"
+) -> Client:
     client = Client()
-    username, password = resolve_credentials()
     try_login_with_session_then_password(
         client,
         username=username,
         password=password,
-        session_file=get_session_file(),
+        session_id=session_id,
+        session_file=session_file,
     )
     return client
 
@@ -63,9 +100,14 @@ async def health() -> dict:
 
 
 @app.get("/profile")
-async def profile() -> dict:
+async def profile(
+    username: Optional[str] = None,
+    password: Optional[str] = None,
+    session_id: Optional[str] = None,
+    session_file: str = "session.json"
+) -> dict:
     try:
-        client = get_authenticated_client()
+        client = get_authenticated_client(username, password, session_id, session_file)
         info = client.account_info()
         # Pydantic v2 safe serialization
         try:
@@ -77,21 +119,33 @@ async def profile() -> dict:
 
 
 @app.post("/upload")
-async def upload(req: UploadRequest) -> dict:
-    video_path = req.video
-    caption = req.description
-    if not os.path.isfile(video_path):
-        raise HTTPException(status_code=400, detail=f"Video not found: {video_path}")
+async def upload(
+    video: UploadFile = File(...),
+    description: str = Form(...),
+    username: Optional[str] = Form(None),
+    password: Optional[str] = Form(None),
+    session_id: Optional[str] = Form(None),
+    session_file: str = Form("session.json")
+) -> dict:
     try:
-        client = get_authenticated_client()
-        url = upload_video(client, video_path, caption)
-        return {"url": url or "", "status": "ok"}
+        # Save uploaded file to temp location
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp_file:
+            content = await video.read()
+            tmp_file.write(content)
+            tmp_path = tmp_file.name
+        
+        try:
+            client = get_authenticated_client(username, password, session_id, session_file)
+            url = upload_video(client, tmp_path, description)
+            return {"url": url or "", "status": "ok"}
+        finally:
+            # Clean up temp file
+            os.unlink(tmp_path)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
 
 @app.on_event("startup")
 async def on_startup() -> None:
-    verbose = os.getenv("IGPOST_VERBOSE", "false").lower() in {"1", "true", "yes"}
-    configure_logging(verbose)
+    logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
     logger.info("API starting up")

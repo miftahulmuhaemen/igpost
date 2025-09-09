@@ -2,3 +2,4 @@ session.json
 uv.lock
 .venv
 .env
+__pycache__/

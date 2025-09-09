@@ -17,15 +17,11 @@ COPY . /app
 # Install project
 RUN pip install --no-cache-dir -e .
 
-# Default environment
-ENV IGPOST_SESSION_FILE=/state/session.json \
-    IGPOST_VERBOSE=true
-
 # Expose API port
 EXPOSE 8000
 
-# Create mount point for state
-VOLUME ["/state"]
+# Create mount point for sessions
+VOLUME ["/sessions"]
 
 # Run API with Uvicorn
 CMD ["uvicorn", "igpost.api.app:app", "--host", "0.0.0.0", "--port", "8000"]

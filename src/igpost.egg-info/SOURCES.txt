@@ -1,10 +1,9 @@
 README.md
 pyproject.toml
 src/igpost/__init__.py
-src/igpost/cli.py
 src/igpost.egg-info/PKG-INFO
 src/igpost.egg-info/SOURCES.txt
 src/igpost.egg-info/dependency_links.txt
-src/igpost.egg-info/entry_points.txt
 src/igpost.egg-info/requires.txt
 src/igpost.egg-info/top_level.txt
+src/igpost/api/app.py

@@ -8,6 +8,7 @@ Description-Content-Type: text/markdown
 Requires-Dist: instagrapi>=2.2.0
 Requires-Dist: fastapi>=0.111.0
 Requires-Dist: uvicorn[standard]>=0.30.0
+Requires-Dist: python-multipart>=0.0.6
 
 # igpost
 
@@ -39,12 +40,15 @@ POST /upload
 Content-Type: multipart/form-data
 
 Fields:
-- video: (file) Video file to upload
+- video: (file, optional) Video file to upload (binary)
+- video_path: (string, optional) Path to video file on server
 - description: (string) Caption for the post
 - username: (string, optional) Instagram username
 - password: (string, optional) Instagram password  
 - session_id: (string, optional) Instagram session ID
 - session_file: (string, optional) Session file path (default: session.json)
+
+Note: Provide either 'video' (file upload) or 'video_path' (server path), not both.
 ```
 
 ## Docker Usage
@@ -63,12 +67,27 @@ docker run -p 8000:8000 -v ./sessions:/sessions igpost:latest
 docker compose up --build -d
 ```
 
+### Windows Volume Mounting
+The docker-compose.yml includes a volume mount for Windows:
+- Windows C: drive is mounted as `/uploads` (read-only)
+- Access Windows files via `/uploads/Users/username/...`
+- Example: `/uploads/Users/john/Videos/myvideo.mp4`
+
 ## API Examples
 
-### Upload with username/password
+### Upload with binary file
 ```bash
 curl -X POST http://localhost:8000/upload \
   -F "video=@/path/to/video.mp4" \
+  -F "description=My awesome video" \
+  -F "username=your_username" \
+  -F "password=your_password"
+```
+
+### Upload with file path (mounted volume)
+```bash
+curl -X POST http://localhost:8000/upload \
+  -F "video_path=/uploads/Users/me/Videos/video.mp4" \
   -F "description=My awesome video" \
   -F "username=your_username" \
   -F "password=your_password"

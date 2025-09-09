@@ -3,7 +3,7 @@ import tempfile
 import logging
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, File, UploadFile, Form, Header
+from fastapi import FastAPI, HTTPException, File, UploadFile, Form, Header, Query
 from pydantic import BaseModel
 
 from instagrapi import Client
@@ -120,7 +120,8 @@ async def profile(
 
 @app.post("/upload")
 async def upload(
-    video: UploadFile = File(...),
+    video: Optional[UploadFile] = File(None),
+    video_path: Optional[str] = Form(None),
     description: str = Form(...),
     username: Optional[str] = Form(None),
     password: Optional[str] = Form(None),
@@ -128,19 +129,35 @@ async def upload(
     session_file: str = Form("session.json")
 ) -> dict:
     try:
-        # Save uploaded file to temp location
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp_file:
-            content = await video.read()
-            tmp_file.write(content)
-            tmp_path = tmp_file.name
+        # Determine video source: uploaded file or file path
+        if video and video_path:
+            raise HTTPException(status_code=400, detail="Provide either video file or video_path, not both")
+        
+        if not video and not video_path:
+            raise HTTPException(status_code=400, detail="Provide either video file or video_path")
+        
+        if video:
+            # Save uploaded file to temp location
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp_file:
+                content = await video.read()
+                tmp_file.write(content)
+                tmp_path = tmp_file.name
+            cleanup_temp = True
+        else:
+            # Use provided file path
+            if not os.path.isfile(video_path):
+                raise HTTPException(status_code=400, detail=f"Video file not found: {video_path}")
+            tmp_path = video_path
+            cleanup_temp = False
         
         try:
             client = get_authenticated_client(username, password, session_id, session_file)
             url = upload_video(client, tmp_path, description)
             return {"url": url or "", "status": "ok"}
         finally:
-            # Clean up temp file
-            os.unlink(tmp_path)
+            # Clean up temp file only if we created it
+            if cleanup_temp:
+                os.unlink(tmp_path)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 

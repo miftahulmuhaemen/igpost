@@ -7,4 +7,5 @@ services:
       - "8000:8000"
     volumes:
       - ./sessions:/sessions
+      - /mnt/c:/uploads:ro  # Mount Windows C: drive as read-only
     restart: unless-stopped

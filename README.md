@@ -8,6 +8,10 @@ FastAPI service for uploading videos to Instagram using instagrapi.
 - Session persistence for authentication
 - Docker support with Alpine Linux
 
+## Prerequisites
+- Python 3.9+
+- `uv` installed (recommended) or `pip`
+
 ## API Endpoints
 
 ### Health Check
@@ -28,12 +32,35 @@ POST /upload
 Content-Type: multipart/form-data
 
 Fields:
-- video: (file) Video file to upload
+- video: (file, optional) Video file to upload (binary)
+- video_path: (string, optional) Path to video file on server
 - description: (string) Caption for the post
 - username: (string, optional) Instagram username
 - password: (string, optional) Instagram password  
 - session_id: (string, optional) Instagram session ID
 - session_file: (string, optional) Session file path (default: session.json)
+
+Note: Provide either 'video' (file upload) or 'video_path' (server path), not both.
+```
+
+## Local Development
+
+### Using uv (Recommended)
+```bash
+# Install dependencies
+uv sync
+
+# Run the service
+uv run uvicorn igpost.api.app:app --host 0.0.0.0 --port 8000 --reload
+```
+
+### Using pip
+```bash
+# Install dependencies
+pip install -e .
+
+# Run the service
+uvicorn igpost.api.app:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 ## Docker Usage
@@ -52,12 +79,27 @@ docker run -p 8000:8000 -v ./sessions:/sessions igpost:latest
 docker compose up --build -d
 ```
 
+### Windows Volume Mounting
+The docker-compose.yml includes a volume mount for Windows:
+- Windows C: drive is mounted as `/uploads` (read-only)
+- Access Windows files via `/uploads/Users/username/...`
+- Example: `/uploads/Users/john/Videos/myvideo.mp4`
+
 ## API Examples
 
-### Upload with username/password
+### Upload with binary file
 ```bash
 curl -X POST http://localhost:8000/upload \
   -F "video=@/path/to/video.mp4" \
+  -F "description=My awesome video" \
+  -F "username=your_username" \
+  -F "password=your_password"
+```
+
+### Upload with file path (mounted volume)
+```bash
+curl -X POST http://localhost:8000/upload \
+  -F "video_path=/uploads/Users/me/Videos/video.mp4" \
   -F "description=My awesome video" \
   -F "username=your_username" \
   -F "password=your_password"

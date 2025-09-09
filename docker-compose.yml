@@ -1,0 +1,16 @@
+version: "3.9"
+services:
+  igpost:
+    build: .
+    container_name: igpost
+    ports:
+      - "8000:8000"
+    environment:
+      - IG_USERNAME=${IG_USERNAME}
+      - IG_PASSWORD=${IG_PASSWORD}
+      - IGPOST_SESSION_FILE=/state/session.json
+      - IGPOST_VERBOSE=true
+    volumes:
+      - ./session.json:/state/session.json
+      - ./data:/data:ro
+    restart: unless-stopped

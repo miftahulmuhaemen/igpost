@@ -1,0 +1,26 @@
+[project]
+name = "igpost"
+version = "0.1.0"
+description = "CLI to upload a video to Instagram using instagrapi and a sessionid"
+readme = "README.md"
+authors = [ { name = "Sahana" } ]
+requires-python = ">=3.9"
+dependencies = [
+  "instagrapi>=2.2.0",
+  "python-dotenv>=1.0.0",
+  "fastapi>=0.111.0",
+  "uvicorn[standard]>=0.30.0"
+]
+
+[project.scripts]
+igpost = "igpost.cli:main"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

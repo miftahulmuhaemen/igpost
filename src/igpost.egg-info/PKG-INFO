@@ -20,6 +20,10 @@ FastAPI service for uploading videos to Instagram using instagrapi.
 - Session persistence for authentication
 - Docker support with Alpine Linux
 
+## Prerequisites
+- Python 3.9+
+- `uv` installed (recommended) or `pip`
+
 ## API Endpoints
 
 ### Health Check
@@ -49,6 +53,26 @@ Fields:
 - session_file: (string, optional) Session file path (default: session.json)
 
 Note: Provide either 'video' (file upload) or 'video_path' (server path), not both.
+```
+
+## Local Development
+
+### Using uv (Recommended)
+```bash
+# Install dependencies
+uv sync
+
+# Run the service
+uv run uvicorn igpost.api.app:app --host 0.0.0.0 --port 8000 --reload
+```
+
+### Using pip
+```bash
+# Install dependencies
+pip install -e .
+
+# Run the service
+uvicorn igpost.api.app:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 ## Docker Usage

@@ -3,3 +3,4 @@ uv.lock
 .venv
 .env
 __pycache__/
+sessions/

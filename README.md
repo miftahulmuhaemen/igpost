@@ -129,3 +129,109 @@ curl "http://localhost:8000/profile?username=your_user&password=your_pass"
 
 ## Library Reference
 - [instagrapi on GitHub](https://github.com/subzeroid/instagrapi)
+
+## Current Issues
+- Python 3.11-alpine base image
+- Multiple build dependencies (gcc, musl-dev, etc.)
+- FFmpeg and media libraries
+- All dependencies installed
+
+## Solutions to Reduce Image Size
+
+### 1. **Multi-stage Build (Recommended)**
+```dockerfile
+# Build stage
+FROM python:3.11-alpine AS builder
+
+# Install build dependencies
+RUN apk add --no-cache \
+    gcc \
+    musl-dev \
+    libffi-dev \
+    openssl-dev \
+    jpeg-dev \
+    zlib-dev
+
+WORKDIR /app
+COPY . /app
+RUN pip install --no-cache-dir -e .
+
+# Runtime stage
+FROM python:3.11-alpine AS runtime
+
+# Install only runtime dependencies
+RUN apk add --no-cache \
+    ffmpeg \
+    jpeg-dev \
+    zlib-dev
+
+# Copy only the built package
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+COPY --from=builder /app/src /app/src
+
+WORKDIR /app
+EXPOSE 8000
+VOLUME ["/sessions"]
+CMD ["uvicorn", "igpost.api.app:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+### 2. **Use Slim Base Image**
+```dockerfile
+FROM python:3.11-slim
+
+# Install only what's needed
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY . /app
+RUN pip install --no-cache-dir -e .
+
+EXPOSE 8000
+VOLUME ["/sessions"]
+CMD ["uvicorn", "igpost.api.app:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+### 3. **Minimal Alpine with Cleanup**
+```dockerfile
+FROM python:3.11-alpine
+
+# Install everything in one layer and clean up
+RUN apk add --no-cache \
+    gcc \
+    musl-dev \
+    libffi-dev \
+    openssl-dev \
+    ffmpeg \
+    jpeg-dev \
+    zlib-dev \
+    && pip install --no-cache-dir instagrapi fastapi uvicorn python-multipart \
+    && apk del gcc musl-dev libffi-dev openssl-dev \
+    && rm -rf /var/cache/apk/*
+
+WORKDIR /app
+COPY src/ /app/src/
+COPY pyproject.toml /app/
+
+EXPOSE 8000
+VOLUME ["/sessions"]
+CMD ["uvicorn", "igpost.api.app:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+### 4. **Distroless Image (Smallest)**
+```dockerfile
+<code_block_to_apply_changes_from>
+```
+
+## Expected Size Reduction
+- **Current**: ~700MB
+- **Multi-stage Alpine**: ~150-200MB
+- **Slim**: ~200-300MB
+- **Distroless**: ~100-150MB
+
+## Quick Fix
+Try the multi-stage build first - it should reduce your image to ~150-200MB while keeping all functionality.
+
+Which approach would you like me to implement?

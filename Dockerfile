@@ -1,27 +1,13 @@
-# Alpine-based image
-FROM python:3.11-alpine
-
-# Install system deps (build and runtime)
-RUN apk add --no-cache \
-    gcc \
-    musl-dev \
-    libffi-dev \
-    openssl-dev \
-    ffmpeg \
-    jpeg-dev \
-    zlib-dev
-
+# Build stage
+FROM python:3.11-slim AS builder
 WORKDIR /app
 COPY . /app
+RUN pip install --no-cache-dir .
 
-# Install project
-RUN pip install --no-cache-dir -e .
-
-# Expose API port
+# Runtime stage - Slim (has python3 in PATH)
+FROM python:3.11-slim
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+WORKDIR /app
 EXPOSE 8000
-
-# Create mount point for sessions
 VOLUME ["/sessions"]
-
-# Run API with Uvicorn
-CMD ["uvicorn", "igpost.api.app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python3", "-m", "uvicorn", "igpost.api.app:app", "--host", "0.0.0.0", "--port", "8000"]
